@@ -24,6 +24,8 @@ import strutils, os, algorithm
 type
   State = enum Unknown, TypeDecl, VarDecl
   Token = enum tokProc, tokType, tokVar
+  TraversalType = enum Recurse, Follow
+  TraversalFlags = set[TraversalType]
 
 proc isEol(line: string, at: int): bool =
   var pos = at
@@ -163,9 +165,11 @@ proc usage() =
 
   Generate tags file for Nim programs and modules.
 
-  -f  --file PATH    specify tags file
-  -R  --recurse      recurse through directories
-      --no-recurse   do not recurse through directories
+  -f  --file PATH     specify tags file
+  -R  --recurse       recurse through directories
+      --no-recurse    do not recurse through directories
+  -L  --follow        follow symbolic links
+      --nofollow      do not follow symbolic links
 """
   quit(0)
 
@@ -179,30 +183,40 @@ proc parseFile(path: string): seq[string] =
     fatal("could not read file \"" & path & "\"")
   result = parseFile(path, lines)
   
-proc parseFileOrDir(path: string, recurse: bool): seq[string] =
+proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
   var finfo: FileInfo
   try:
     finfo = getFileInfo(path)
   except:
     fatal("could not access file \"" & path & "\"")
   case finfo.kind
-  of pcFile, pcLinkToFile:
+  of pcFile:
     result = parseFile(path)
+  of pcLinkToFile:
+    if Follow in travFlags:
+      result = parseFile(path)
   of pcDir, pcLinkToDir:
-    result = @[]
-    for kind, path2 in walkDir(path):
-      case kind
-      of pcFile, pcLinkToFile:
-        if path2.endsWith(".nim"):
-          add(result, parseFile(path2))
-      of pcDir, pcLinkToDir:
-        if recurse:
-          add(result, parseFileOrDir(path2, recurse))
+    if finfo.kind == pcDir or Follow in travFlags:
+      result = @[]
+      for kind, path2 in walkDir(path):
+        case kind
+        of pcFile:
+          if path2.endsWith(".nim"):
+            add(result, parseFile(path2))
+        of pcLinkToFile:
+          if Follow in travFlags and path2.endsWith(".nim"):
+            add(result, parseFile(path2))
+        of pcDir:
+          if Recurse in travFlags:
+            add(result, parseFileOrDir(path2, travFlags))
+        of pcLinkToDir:
+          if Recurse in travFlags and Follow in travFlags:
+            add(result, parseFileOrDir(path2, travFlags))
   
 proc main() =
   var tagsFile = "tags"
   var tags = newSeq[string]()
-  var recurse = false
+  var travFlags: TraversalFlags
   var i = 1
   let nargs = paramCount()
   if nargs == 0 or nargs == 1 and paramStr(1) in ["-h", "--help"]:
@@ -216,13 +230,15 @@ proc main() =
       i += 1
       tagsFile = paramStr(i)
     of "-R", "--recurse":
-      recurse = true
+      incl travFlags, Recurse
     of "--no-recurse":
-      recurse = false
+      excl travFlags, Recurse
+    of "-L", "--follow-links":
+      incl travFlags, Follow
     else:
       if arg[0] == '-':
         fatal("unrecognized option: " & arg)
-      for tag in parseFileOrDir(arg, recurse):
+      for tag in parseFileOrDir(arg, travFlags):
         add(tags, tag)
     i += 1
   tags.sort(cmp)

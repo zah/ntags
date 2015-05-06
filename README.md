@@ -26,6 +26,10 @@ option only affects directories listed after it on the command line.
 The `--norecurse` option turns off directory recursion for all
 subsequent directories.
 
+Similarly, the `-L` and `--follow` options cause `ntags` to follow
+symbolic links, while `--nofollow` suppresses the behavior. The
+default is not to follow symbolic links.
+
 # Limitations
 
 The parser is still very simple. It can handle only top-level
