@@ -88,6 +88,7 @@ proc quoteSearch(line: string): string =
 
 proc genTagEntry(path, line: string, name: string, tokType: Token): string =
   result = ""
+  shallow result
   add(result, name)
   add(result, '\t')
   add(result, path)
