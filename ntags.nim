@@ -22,7 +22,7 @@
 import strutils, os, algorithm
 
 type
-  State = enum Unknown, TypeDecl, VarDecl
+  State = enum Unknown, TypeDecl, VarDecl, Indented
   Token = enum tokProc, tokType, tokVar
   TraversalType = enum Recurse, Follow
   TraversalFlags = set[TraversalType]
@@ -41,15 +41,18 @@ proc indent(line: string): int =
   for ch in line:
     case ch
     of ' ': result += 1
+    of '#':
+      return -1
     else:
       return
-  result = 0
+  return -1
 
-proc headToken(line: string): string =
+proc headToken(line: string, start: int): string =
   result = ""
-  for ch in line:
+  for i in start..len(line)-1:
+    let ch = line[i]
     case ch
-    of ' ', '\t', '#': return
+    of ' ', '\t', '#', ':': return
     else: add(result, ch)
 
 proc idents(line: string, start: int): seq[string] =
@@ -101,12 +104,21 @@ iterator genTagEntries(path, line: string,
   for name in names:
     yield genTagEntry(path, line, name, tokType)
 
-proc parseFile(path: string, lines: seq[string]): seq[string] =
-  result = @[]
+proc parseFile(path: string, lines: seq[string],
+               startLine: int = 0, baseIndent: int = 0): (int, seq[string]) =
+  var tags = newSeq[string]()
   var markIndent = -1
   var state = Unknown
-  for line in lines:
-    let ind = indent(line)
+  var lineNo = startLine
+  while lineNo < len(lines):
+    let line = lines[lineNo]
+    lineNo += 1
+    var ind = indent(line)
+    if ind < 0:
+      continue # skip empty line
+    if ind < baseIndent:
+      return (lineNo-1, tags)
+    ind -= baseIndent
 
     template ifDeclaration(body: untyped) =
       if not isEol(line, 0):
@@ -120,15 +132,15 @@ proc parseFile(path: string, lines: seq[string]): seq[string] =
     var token: string
 
     template parseIdents(line: string, tokType: Token) =
-      let start = len(token)
+      let start = len(token) + baseIndent
       let names = idents(line, start)
       for tagEntry in genTagEntries(path, line, names, tokType):
-        add(result, tagEntry)
+        add(tags, tagEntry)
 
     if ind == 0:
-      token = headToken(line)
+      token = headToken(line, baseIndent)
       let eol = isEol(line, len(token))
-      case headToken(line)
+      case token
       of "proc", "template", "macro", "iterator":
         parseIdents(line, tokProc)
         state = Unknown
@@ -144,19 +156,27 @@ proc parseFile(path: string, lines: seq[string]): seq[string] =
           state = Unknown
         else:
           state = VarDecl
+      of "when", "else":
+        state = Indented
       else:
         discard
     else:
-      token = nil
       case state
       of Unknown:
         discard
+      of Indented:
+        let (newLineNo, newTags) =
+          parseFile(path, lines, lineNo-1, ind+baseIndent)
+        add(tags, newTags)
+        lineNo = newLineNo
+        state = Unknown
       of TypeDecl:
         ifDeclaration:
           parseIdents(line, tokType)
       of VarDecl:
         ifDeclaration:
           parseIdents(line, tokVar)
+  return (lineNo, tags)
 
 proc fatal(msg: string) =
   quit("ntags: " & msg)
@@ -182,7 +202,7 @@ proc parseFile(path: string): seq[string] =
     file.close()
   except:
     fatal("could not read file \"" & path & "\"")
-  result = parseFile(path, lines)
+  result = parseFile(path, lines)[1]
   
 proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
   var finfo: FileInfo
