@@ -139,7 +139,7 @@ proc parseFile(path: string, lines: seq[string],
 
     if ind == 0:
       token = headToken(line, baseIndent)
-      let eol = isEol(line, len(token))
+      let eol = isEol(line, len(token)+baseIndent)
       case token
       of "proc", "template", "macro", "iterator":
         parseIdents(line, tokProc)
