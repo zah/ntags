@@ -37,7 +37,6 @@ declarations.
 
 In particular, it does not handle:
 
-* Declarations inside when clauses.
 * Declarations inside procedures.
 * Enum members.
 * Object fields.
