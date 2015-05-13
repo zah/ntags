@@ -19,7 +19,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import strutils, os, algorithm
+import strutils, os, algorithm, sets
 
 type
   State = enum Unknown, TypeDecl, VarDecl, Indented
@@ -205,18 +205,23 @@ proc parseFile(path: string): seq[string] =
   result = parseFile(path, lines)[1]
   
 proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
+  var
+    idCache {.global.}: HashSet[(DeviceId, FileId)]
+    idCacheInit {.global.}: bool
+  if not idCacheInit:
+    idCache = initSet[(DeviceId, FileId)]()
+    idCacheInit = true
   var finfo: FileInfo
   try:
     finfo = getFileInfo(path)
   except:
     fatal("could not access file \"" & path & "\"")
+  if idCache.containsOrIncl(finfo.id):
+    return @[]
   case finfo.kind
   of pcFile:
     result = parseFile(path)
-  of pcLinkToFile:
-    if Follow in travFlags:
-      result = parseFile(path)
-  of pcDir, pcLinkToDir:
+  of pcDir:
     if finfo.kind == pcDir or Follow in travFlags:
       result = @[]
       for kind, path2 in walkDir(path):
@@ -224,15 +229,26 @@ proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
         of pcFile:
           if path2.endsWith(".nim"):
             add(result, parseFile(path2))
-        of pcLinkToFile:
-          if Follow in travFlags and path2.endsWith(".nim"):
-            add(result, parseFile(path2))
         of pcDir:
           if Recurse in travFlags:
             add(result, parseFileOrDir(path2, travFlags))
-        of pcLinkToDir:
-          if Recurse in travFlags and Follow in travFlags:
-            add(result, parseFileOrDir(path2, travFlags))
+        of pcLinkToFile, pcLinkToDir:
+          if Follow in travFlags:
+            try:
+              case getFileInfo(path2).kind
+              of pcFile:
+                if path2.endsWith(".nim"):
+                  add(result, parseFile(path2))
+              of pcDir:
+                add(result, parseFileOrDir(path2, travFlags))
+              else:
+                discard
+            except:
+              discard # ignore broken links
+  else:
+    # This cannot normally happen except as a result of
+    # a race condition on the file system.
+    fatal("changed symbolic link: " & path)
   
 proc main() =
   var tagsFile = "tags"
@@ -254,7 +270,7 @@ proc main() =
       incl travFlags, Recurse
     of "--no-recurse":
       excl travFlags, Recurse
-    of "-L", "--follow-links":
+    of "-L", "--follow":
       incl travFlags, Follow
     else:
       if arg[0] == '-':
