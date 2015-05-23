@@ -30,6 +30,11 @@ Similarly, the `-L` and `--follow` options cause `ntags` to follow
 symbolic links, while `--nofollow` suppresses the behavior. The
 default is not to follow symbolic links.
 
+The `--fix-eol` option will adjust the tag search patterns to deal
+with files that have lines that sometimes, but not always, end in
+`\r` by adding a `\r\?` at the end of the search pattern.
+
+
 # Limitations
 
 The parser is still very simple. It can handle only top-level

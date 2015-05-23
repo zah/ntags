@@ -24,8 +24,8 @@ import strutils, os, algorithm, sets
 type
   State = enum Unknown, TypeDecl, VarDecl, Indented
   Token = enum tokProc, tokType, tokVar
-  TraversalType = enum Recurse, Follow
-  TraversalFlags = set[TraversalType]
+  TagOption = enum Recurse, Follow, FixEol
+  TagOptions = set[TagOption]
 
 proc isEol(line: string, at: int): bool =
   var pos = at
@@ -81,30 +81,33 @@ proc idents(line: string, start: int): seq[string] =
     else:
       return
 
-proc quoteSearch(line: string): string =
+proc quoteSearch(line: string, options: TagOptions): string =
   result = "/^"
   for ch in line:
     if ch in {'/', '^', '$', '\\'}:
       add(result, '\\')
     add(result, ch)
+  if FixEol in options:
+    add(result, "\\r\\?")
   add(result, "$/")
 
-proc genTagEntry(path, line: string, name: string, tokType: Token): string =
+proc genTagEntry(path, line: string, name: string, tokType: Token,
+                 options: TagOptions): string =
   result = ""
   shallow result
   add(result, name)
   add(result, '\t')
   add(result, path)
   add(result, '\t')
-  add(result, quoteSearch(line))
+  add(result, quoteSearch(line, options))
   add(result, "\n")
 
-iterator genTagEntries(path, line: string,
-                       names: seq[string], tokType: Token): string =
+iterator genTagEntries(path, line: string, names: seq[string],
+                       tokType: Token, options: TagOptions): string =
   for name in names:
-    yield genTagEntry(path, line, name, tokType)
+    yield genTagEntry(path, line, name, tokType, options)
 
-proc parseFile(path: string, lines: seq[string],
+proc parseFile(path: string, lines: seq[string], options: TagOptions,
                startLine: int = 0, baseIndent: int = 0): (int, seq[string]) =
   var tags = newSeq[string]()
   var markIndent = -1
@@ -134,7 +137,7 @@ proc parseFile(path: string, lines: seq[string],
     template parseIdents(line: string, tokType: Token) =
       let start = len(token) + baseIndent
       let names = idents(line, start)
-      for tagEntry in genTagEntries(path, line, names, tokType):
+      for tagEntry in genTagEntries(path, line, names, tokType, options):
         add(tags, tagEntry)
 
     if ind == 0:
@@ -166,7 +169,7 @@ proc parseFile(path: string, lines: seq[string],
         discard
       of Indented:
         let (newLineNo, newTags) =
-          parseFile(path, lines, lineNo-1, ind+baseIndent)
+          parseFile(path, lines, options, lineNo-1, ind+baseIndent)
         add(tags, newTags)
         lineNo = newLineNo
         state = Unknown
@@ -191,10 +194,11 @@ proc usage() =
       --no-recurse    do not recurse through directories
   -L  --follow        follow symbolic links
       --nofollow      do not follow symbolic links
+      --fix-eol       adjust for files with inconsistent end of line markers
 """
   quit(0)
 
-proc parseFile(path: string): seq[string] =
+proc parseFile(path: string, options: TagOptions): seq[string] =
   var lines: seq[string]
   try:
     var file = open(path, fmRead)
@@ -202,9 +206,9 @@ proc parseFile(path: string): seq[string] =
     file.close()
   except:
     fatal("could not read file \"" & path & "\"")
-  result = parseFile(path, lines)[1]
+  result = parseFile(path, lines, options)[1]
   
-proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
+proc parseFileOrDir(path: string, options: TagOptions): seq[string] =
   var
     idCache {.global.}: HashSet[(DeviceId, FileId)]
     idCacheInit {.global.}: bool
@@ -220,27 +224,27 @@ proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
     return @[]
   case finfo.kind
   of pcFile:
-    result = parseFile(path)
+    result = parseFile(path, options)
   of pcDir:
-    if finfo.kind == pcDir or Follow in travFlags:
+    if finfo.kind == pcDir or Follow in options:
       result = @[]
       for kind, path2 in walkDir(path):
         case kind
         of pcFile:
           if path2.endsWith(".nim"):
-            add(result, parseFile(path2))
+            add(result, parseFile(path2, options))
         of pcDir:
-          if Recurse in travFlags:
-            add(result, parseFileOrDir(path2, travFlags))
+          if Recurse in options:
+            add(result, parseFileOrDir(path2, options))
         of pcLinkToFile, pcLinkToDir:
-          if Follow in travFlags:
+          if Follow in options:
             try:
               case getFileInfo(path2).kind
               of pcFile:
                 if path2.endsWith(".nim"):
-                  add(result, parseFile(path2))
+                  add(result, parseFile(path2, options))
               of pcDir:
-                add(result, parseFileOrDir(path2, travFlags))
+                add(result, parseFileOrDir(path2, options))
               else:
                 discard
             except:
@@ -253,7 +257,7 @@ proc parseFileOrDir(path: string, travFlags: TraversalFlags): seq[string] =
 proc main() =
   var tagsFile = "tags"
   var tags = newSeq[string]()
-  var travFlags: TraversalFlags
+  var options: TagOptions
   var i = 1
   let nargs = paramCount()
   if nargs == 0 or nargs == 1 and paramStr(1) in ["-h", "--help"]:
@@ -267,15 +271,17 @@ proc main() =
       i += 1
       tagsFile = paramStr(i)
     of "-R", "--recurse":
-      incl travFlags, Recurse
+      incl options, Recurse
     of "--no-recurse":
-      excl travFlags, Recurse
+      excl options, Recurse
     of "-L", "--follow":
-      incl travFlags, Follow
+      incl options, Follow
+    of "--fix-eol":
+      incl options, FixEol
     else:
       if arg[0] == '-':
         fatal("unrecognized option: " & arg)
-      for tag in parseFileOrDir(arg, travFlags):
+      for tag in parseFileOrDir(arg, options):
         add(tags, tag)
     i += 1
   tags.sort(cmp)
