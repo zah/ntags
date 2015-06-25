@@ -84,7 +84,7 @@ proc idents(line: string, start: int): seq[string] =
 proc quoteSearch(line: string, options: TagOptions): string =
   result = "/^"
   for ch in line:
-    if ch in {'/', '^', '$', '\\'}:
+    if ch in {'/', '\\'}:
       add(result, '\\')
     add(result, ch)
   if FixEol in options:
