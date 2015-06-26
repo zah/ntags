@@ -1,6 +1,6 @@
 [Package]
 name = "ntags"
-version = "0.3.3"
+version = "0.3.4"
 author = "Reimer Behrends"
 description = "Tags generator for Nim programs and modules."
 license = "MIT"
