@@ -131,6 +131,7 @@ proc parseFile(path: string, lines: seq[string], options: TagOptions,
           body
         if ind < markIndent:
           state = Unknown
+          markIndent = -1
 
     var token: string
 
@@ -162,7 +163,7 @@ proc parseFile(path: string, lines: seq[string], options: TagOptions,
       of "when", "else":
         state = Indented
       else:
-        discard
+        state = Unknown
     else:
       case state
       of Unknown:
