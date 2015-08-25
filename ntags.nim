@@ -28,7 +28,7 @@
 import strutils, os, algorithm, sets
 
 type
-  State = enum Unknown, TypeDecl, VarDecl, Indented
+  State = enum Unknown, TypeDecl, VarDecl, Indented, PostIndented
   Token = enum tokProc, tokType, tokVar
   TagOption = enum Recurse, Follow, FixEol
   TagOptions = set[TagOption]
@@ -166,20 +166,27 @@ proc parseFile(path: string, lines: seq[string], options: TagOptions,
           state = Unknown
         else:
           state = VarDecl
-      of "when", "else":
+      of "when":
         state = Indented
+      of "else", "elif":
+        if state == PostIndented:
+          state = Indented
+        else:
+          state = Unknown
       else:
         state = Unknown
     else:
       case state
       of Unknown:
         discard
+      of PostIndented:
+        state = Unknown
       of Indented:
         let (newLineNo, newTags) =
           parseFile(path, lines, options, lineNo-1, ind+baseIndent)
         add(tags, newTags)
         lineNo = newLineNo
-        state = Unknown
+        state = PostIndented
       of TypeDecl:
         ifDeclaration:
           parseIdents(line, tokType)
