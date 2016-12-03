@@ -29,9 +29,13 @@ import strutils, os, algorithm, sets
 
 type
   State = enum Unknown, TypeDecl, VarDecl, Indented, PostIndented
+  Scope = enum Local, Global
   Token = enum tokProc, tokType, tokVar
   TagOption = enum Recurse, Follow, FixEol
   TagOptions = set[TagOption]
+
+const
+  tokenTypeName: array[Token, string] = ["f", "t", "v"]
 
 proc isEol(line: string, at: int): bool =
   var pos = at
@@ -61,7 +65,11 @@ proc headToken(line: string, start: int): string =
     of ' ', '\t', '#', ':': return
     else: add(result, ch)
 
-proc idents(line: string, start: int): seq[string] =
+proc printMarked(s: string, off: int) =
+  echo s
+  echo repeat(' ', off), "^"
+
+proc idents(line: string, start: int): seq[(string, Scope)] =
   result = @[]
   var pos = start
   var mark: int
@@ -74,7 +82,14 @@ proc idents(line: string, start: int): seq[string] =
       const identChars = {'a'..'z', 'A'..'Z', '0'..'9', '_'}
       while pos < len(line) and line[pos] in identChars:
         pos += 1
-      result.add(line[mark..pos-1])
+      let ident = line[mark..pos-1]
+      while pos < len(line) and line[pos] in {' ', '\t'}:
+        pos += 1
+      if line[pos] == '*':
+        pos += 1
+        result.add((ident, Global))
+      else:
+        result.add((ident, Local))
     of '`':
       mark = pos
       pos += 1
@@ -82,8 +97,15 @@ proc idents(line: string, start: int): seq[string] =
         pos += 1
       if pos == len(line):
         return
-      result.add(line[mark..pos])
       pos += 1
+      let ident = line[mark..pos-1]
+      while pos < len(line) and line[pos] in {' ', '\t'}:
+        pos += 1
+      if line[pos] == '*':
+        pos += 1
+        result.add((ident, Global))
+      else:
+        result.add((ident, Local))
     else:
       return
 
@@ -97,7 +119,7 @@ proc quoteSearch(line: string, options: TagOptions): string =
     add(result, "\\r\\?")
   add(result, "$/")
 
-proc genTagEntry(path, line: string, name: string, tokType: Token,
+proc genTagEntry(path, line: string, name: string, scope: Scope, tokType: Token,
                  options: TagOptions): string =
   result = ""
   shallow result
@@ -106,12 +128,16 @@ proc genTagEntry(path, line: string, name: string, tokType: Token,
   add(result, path)
   add(result, '\t')
   add(result, quoteSearch(line, options))
+  add(result, ";\"\t")
+  add(result, tokenTypeName[tokType])
+  if scope == Local:
+    add(result, "\tfile:")
   add(result, "\n")
 
-iterator genTagEntries(path, line: string, names: seq[string],
+iterator genTagEntries(path, line: string, tokens: seq[(string, Scope)],
                        tokType: Token, options: TagOptions): string =
-  for name in names:
-    yield genTagEntry(path, line, name, tokType, options)
+  for name, scope in tokens.items:
+    yield genTagEntry(path, line, name, scope, tokType, options)
 
 proc parseFile(path: string, lines: seq[string], options: TagOptions,
                startLine: int = 0, baseIndent: int = 0): (int, seq[string]) =
@@ -143,8 +169,8 @@ proc parseFile(path: string, lines: seq[string], options: TagOptions,
 
     template parseIdents(line: string, tokType: Token) =
       let start = len(token) + baseIndent
-      let names = idents(line, start)
-      for tagEntry in genTagEntries(path, line, names, tokType, options):
+      let tokens = idents(line, start)
+      for tagEntry in genTagEntries(path, line, tokens, tokType, options):
         add(tags, tagEntry)
 
     if ind == 0:

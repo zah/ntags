@@ -1,6 +1,6 @@
 [Package]
 name = "ntags"
-version = "0.4.1"
+version = "0.5.0"
 author = "Reimer Behrends"
 description = "Tags generator for Nim programs and modules."
 license = "Boost"
