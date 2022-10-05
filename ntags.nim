@@ -85,7 +85,7 @@ proc idents(line: string, start: int): seq[(string, Scope)] =
       let ident = line[mark..pos-1]
       while pos < len(line) and line[pos] in {' ', '\t'}:
         pos += 1
-      if line[pos] == '*':
+      if pos < line.len and line[pos] == '*':
         pos += 1
         result.add((ident, Global))
       else:
