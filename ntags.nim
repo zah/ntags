@@ -137,8 +137,11 @@ proc genTagEntry(
   add(result, quoteSearch(line, options))
   add(result, ";\"\t")
   add(result, tokenTypeName[tokType])
+  add(result, '\t')
   if scope == Local:
-    add(result, "\tfile:")
+    add(result, "file: ")
+  add(result, "lineno:")
+  add(result, $lineNo)
   add(result, "\n")
 
 iterator genTagEntries(
