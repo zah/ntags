@@ -49,3 +49,7 @@ In particular, it does not handle:
 It also does not handle inconsistent use of case/style. A future version
 should scan the files for all possible uses of an identifier and
 generate tags for all versions.
+
+### TAGS Format
+
+https://ctags.sourceforge.net/FORMAT
