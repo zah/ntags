@@ -119,8 +119,15 @@ proc quoteSearch(line: string, options: TagOptions): string =
     add(result, "\\r\\?")
   add(result, "$/")
 
-proc genTagEntry(path, line: string, name: string, scope: Scope, tokType: Token,
-                 options: TagOptions): string =
+proc genTagEntry(
+  path: string,
+  line: string,
+  lineNo: int,
+  name: string,
+  scope: Scope,
+  tokType: Token,
+  options: TagOptions,
+): string =
   result = ""
   shallow result
   add(result, name)
@@ -130,14 +137,23 @@ proc genTagEntry(path, line: string, name: string, scope: Scope, tokType: Token,
   add(result, quoteSearch(line, options))
   add(result, ";\"\t")
   add(result, tokenTypeName[tokType])
+  add(result, '\t')
   if scope == Local:
-    add(result, "\tfile:")
+    add(result, "file: ")
+  add(result, "lineno:")
+  add(result, $lineNo)
   add(result, "\n")
 
-iterator genTagEntries(path, line: string, tokens: seq[(string, Scope)],
-                       tokType: Token, options: TagOptions): string =
+iterator genTagEntries(
+  path: string,
+  line: string,
+  lineNo: int,
+  tokens: seq[(string, Scope)],
+  tokType: Token,
+  options: TagOptions,
+): string =
   for name, scope in tokens.items:
-    yield genTagEntry(path, line, name, scope, tokType, options)
+    yield genTagEntry(path, line, lineNo, name, scope, tokType, options)
 
 proc parseFile(path: string, lines: seq[string], options: TagOptions,
                startLine: int = 0, baseIndent: int = 0): (int, seq[string]) =
@@ -170,14 +186,14 @@ proc parseFile(path: string, lines: seq[string], options: TagOptions,
     template parseIdents(line: string, tokType: Token) =
       let start = len(token) + baseIndent
       let tokens = idents(line, start)
-      for tagEntry in genTagEntries(path, line, tokens, tokType, options):
+      for tagEntry in genTagEntries(path, line, lineNo, tokens, tokType, options):
         add(tags, tagEntry)
 
     if ind == 0:
       token = headToken(line, baseIndent)
       let eol = isEol(line, len(token)+baseIndent)
       case token
-      of "proc", "template", "macro", "iterator":
+      of "func", "proc", "template", "macro", "iterator":
         parseIdents(line, tokProc)
         state = Unknown
       of "type":
