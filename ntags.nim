@@ -129,7 +129,6 @@ proc genTagEntry(
   options: TagOptions,
 ): string =
   result = ""
-  shallow result
   add(result, name)
   add(result, '\t')
   add(result, path)
