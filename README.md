@@ -34,6 +34,16 @@ The `--fix-eol` option will adjust the tag search patterns to deal
 with files that have lines that sometimes, but not always, end in
 `\r` by adding a `\r\?` at the end of the search pattern.
 
+![webp](video.webp "WebP example")
+![webm](video.webm "WebM example")
+![gif](video.gif "Gif example")
+![png](video.png "APNG example")
+
+<video controls autoplay>
+  <source src="video.webm" type="video/webm">
+  <source src="video.webp" type="video/webp">
+  Your browser does not support the video tag.
+</video>
 
 # Limitations
 
