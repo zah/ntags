@@ -34,7 +34,15 @@ The `--fix-eol` option will adjust the tag search patterns to deal
 with files that have lines that sometimes, but not always, end in
 `\r` by adding a `\r\?` at the end of the search pattern.
 
-![webp](video.webp "WebP example")
+Event log start.
+
+![webp](eventlog.mp4 "Event Log 1")
+![webm](eventlog.mp4 "Event Log 2")
+![mp4](eventlog.mp4 "Event Log 3")
+
+Event log end.
+
+![Any name would work?](video.webp "WebP example")
 ![webm](video.webm "WebM example")
 ![gif](video.gif "Gif example")
 ![png](video.png "APNG example")
