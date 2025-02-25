@@ -4,6 +4,7 @@
 ![webm](video.webm "WebM example")
 ![gif](video.gif "Gif example")
 ![png](video.png "APNG example")
+![svg](https://downloads.codetracer.com/video6.svg "SVG example")
 
 <video controls autoplay>
   <source src="video.webm" type="video/webm">
